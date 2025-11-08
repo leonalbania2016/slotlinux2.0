@@ -1,16 +1,17 @@
-FROM node:20-alpine AS build
+# ---------- Stage 1: Build ----------
+FROM node:22-alpine AS builder
 WORKDIR /app
-COPY package.json package-lock.json* ./
-RUN npm ci --no-audit --no-fund
+
+COPY package*.json ./
+RUN npm install
+
 COPY . .
 RUN npm run build
 
+# ---------- Stage 2: Serve ----------
+FROM nginx:alpine
+WORKDIR /usr/share/nginx/html
+COPY --from=builder /app/dist ./
 
-FROM node:20-alpine
-WORKDIR /app
-ENV NODE_ENV=production
-COPY --from=build /app/dist ./dist
-COPY package.json package-lock.json* ./
-RUN npm ci --omit=dev --no-audit --no-fund
-EXPOSE 4173
-CMD ["npm","run","preview"]
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]
