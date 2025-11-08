@@ -1,36 +1,51 @@
 // src/api.ts
+// Central API handler for Slot Manager frontend
 
-// Base URL for your backend — make sure you set VITE_BACKEND_URL in .env
-const API_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:8080";
+// ✅ 1️⃣ Always explicitly log your backend URL for debugging
+const API_URL =
+  import.meta.env.VITE_BACKEND_URL?.trim() || "http://localhost:8080";
 
-// Save slot configuration
+console.log("Backend API URL (build):", API_URL);
+
+// ✅ 2️⃣ Helper wrapper for consistent fetch calls
+async function apiFetch(path: string, options: RequestInit = {}) {
+  const res = await fetch(`${API_URL}${path}`, {
+    ...options,
+    credentials: "include", // ensures cookies are always sent
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    },
+  });
+
+  // Automatically handle backend errors
+  if (!res.ok) {
+    const msg = await res.text();
+    throw new Error(`Request failed: ${res.status} ${msg}`);
+  }
+  return res.json();
+}
+
+// ✅ 3️⃣ API functions
 export async function saveSlots(guildId: string, data: any) {
-  const res = await fetch(`${API_URL}/api/slots/${guildId}`, {
+  return apiFetch(`/api/slots/${guildId}`, {
     method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
-  if (!res.ok) throw new Error("Failed to save slots");
-  return res.json();
 }
 
-// Send slots to Discord
 export async function sendToDiscord(guildId: string, channelId: string) {
-  const res = await fetch(`${API_URL}/api/discord/send/${guildId}/${channelId}`, {
+  return apiFetch(`/api/discord/send/${guildId}/${channelId}`, {
     method: "POST",
-    credentials: "include",
   });
-  if (!res.ok) throw new Error("Failed to send to Discord");
-  return res.json();
 }
 
-// Get bot invite link
 export async function getInviteUrl() {
-  const res = await fetch(`${API_URL}/api/discord/invite-url`, {
-    credentials: "include",
-  });
-  if (!res.ok) throw new Error("Failed to get invite URL");
-  const data = await res.json();
+  const data = await apiFetch(`/api/discord/invite-url`);
   return data.url;
+}
+
+// ✅ 4️⃣ Add this (if not already existing in another file)
+export async function getCurrentUser() {
+  return apiFetch(`/api/me`);
 }
