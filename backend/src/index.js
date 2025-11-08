@@ -17,10 +17,11 @@ const PORT = process.env.PORT || 8080;
 
 app.set("trust proxy", 1);
 
-// --- Fix CORS ---
-const allowedOrigins = process.env.FRONTEND_URL
-  ? process.env.FRONTEND_URL.split(",")
-  : ["http://localhost:5173"];
+// ✅ Allow both localhost and your Render frontend for safety
+const allowedOrigins = [
+  "http://localhost:5173",
+  "https://slotlinux2-0-a4zz.onrender.com"
+];
 
 app.use(
   cors({
@@ -31,7 +32,7 @@ app.use(
 
 app.use(express.json({ limit: "2mb" }));
 
-// --- Fix session cookies for Render ---
+// ✅ Session settings for Render HTTPS
 app.use(
   session({
     secret: process.env.SESSION_SECRET || "devsecret",
@@ -40,9 +41,9 @@ app.use(
     proxy: true,
     cookie: {
       httpOnly: true,
-      secure: true, // Always true on Render (uses HTTPS)
-      sameSite: "none", // Must be 'none' for cross-site cookies
-      maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
+      secure: true,
+      sameSite: "none",
+      maxAge: 1000 * 60 * 60 * 24 * 7,
     },
   })
 );
@@ -70,7 +71,6 @@ app.listen(PORT, async () => {
   try {
     await prisma.$connect();
     console.log(`✅ Backend running on port ${PORT}`);
-    console.log(`🌐 Allowed origins: ${allowedOrigins}`);
   } catch (e) {
     console.error("❌ DB connection failed:", e);
     process.exit(1);
