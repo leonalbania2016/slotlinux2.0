@@ -2,6 +2,7 @@ import axios from 'axios';
 
 
 const baseURL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080';
+console.log("Backend API URL (build):", import.meta.env.VITE_BACKEND_URL);
 
 
 export const api = axios.create({
