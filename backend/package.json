@@ -1,0 +1,26 @@
+{
+"name": "slot-manager-backend",
+"version": "1.0.0",
+"type": "module",
+"scripts": {
+"dev": "nodemon src/index.js",
+"start": "node src/index.js",
+"prisma:generate": "prisma generate",
+"prisma:migrate": "prisma migrate dev --name init",
+"prisma:deploy": "prisma migrate deploy"
+},
+"dependencies": {
+"axios": "^1.7.7",
+"cors": "^2.8.5",
+"dotenv": "^16.4.5",
+"express": "^4.19.2",
+"express-session": "^1.17.3",
+"passport": "^0.7.0",
+"passport-discord": "^0.1.4",
+"prisma": "^5.18.0",
+"@prisma/client": "^5.18.0"
+},
+"devDependencies": {
+"nodemon": "^3.1.7"
+}
+}
