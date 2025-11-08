@@ -1,61 +1,80 @@
-// Prisma schema
-// Switch provider to postgresql on Render if preferred (and update DATABASE_URL)
-
-
+// backend/prisma/schema.prisma
 generator client {
-provider = "prisma-client-js"
+  provider = "prisma-client-js"
 }
-
 
 datasource db {
-provider = "sqlite"
-url = env("DATABASE_URL")
+  provider = "sqlite"
+  url      = env("DATABASE_URL") // file:./dev.db on Render
 }
-
 
 model User {
-id String @id @default(cuid())
-discordId String @unique
-username String
-discriminator String
-avatar String?
-createdAt DateTime @default(now())
-updatedAt DateTime @updatedAt
-slotConfigs SlotConfig[]
+  id           String   @id @default(cuid())
+  discordId    String   @unique
+  username     String
+  avatar       String?
+  accessToken  String?
+  refreshToken String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // A user may manage many guilds (owner/admin); optional relationship if you track it later
+  Guilds       Guild[]  @relation("UserGuilds")
 }
 
+model Guild {
+  id        String   @id @default(cuid())
+  guildId   String   @unique           // Discord guild ID
+  name      String
+  ownerId   String?                     // optional link to User
+  owner     User?     @relation(fields: [ownerId], references: [id], name: "UserGuilds")
+
+  // Current slot configuration reference
+  slotConfig SlotConfig?
+
+  // If you post/update a message in a channel for this guild, store it to update later
+  messages  DiscordMessage[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
 
 model SlotConfig {
-id String @id @default(cuid())
-userId String
-guildId String // Discord guild id
-background String // filename under frontend/src/assets/gifs
-slotCount Int
-messageId String? // Discord message id for last sent slots
-channelId String? // Last channel used for sending
-updatedAt DateTime @updatedAt
-createdAt DateTime @default(now())
+  id         String  @id @default(cuid())
+  guildId    String  @unique
+  guild      Guild   @relation(fields: [guildId], references: [id])
 
+  // Global background GIF (one for all slots as per your rules)
+  background String
 
-user User @relation(fields: [userId], references: [id])
-slots Slot[]
+  // Total slots (2..25 enforced in app; can also add @db.Check later if needed)
+  slotCount  Int
 
+  slots      Slot[]
 
-@@unique([userId, guildId])
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }
 
-
 model Slot {
-id String @id @default(cuid())
-slotConfigId String
-position Int // 0..(slotCount-1)
-emoji String // emoji id or unicode literal
-updatedAt DateTime @updatedAt
-createdAt DateTime @default(now())
+  id          String     @id @default(cuid())
+  position    Int                         // 0-based index
+  emoji       String                      // emoji id or name
+  slotConfigId String
+  slotConfig  SlotConfig @relation(fields: [slotConfigId], references: [id])
 
+  @@unique([slotConfigId, position])      // one entry per position per config
+}
 
-slotConfig SlotConfig @relation(fields: [slotConfigId], references: [id])
+model DiscordMessage {
+  id        String   @id @default(cuid())
+  guildId   String
+  guild     Guild    @relation(fields: [guildId], references: [id])
 
+  channelId String   // Discord channel ID
+  messageId String   // Discord message ID (to edit later)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-@@unique([slotConfigId, position])
+  @@unique([guildId, channelId])          // one tracked message per guild/channel
 }
