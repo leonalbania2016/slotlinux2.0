@@ -19,12 +19,10 @@ const PORT = process.env.PORT || 8080;
 app.set("trust proxy", 1);
 
 // ✅ Allow CORS for your frontend
-app.use(
-  cors({
-    origin: ["https://slots.darksideorg.com"], // exact frontend URL
-    credentials: true,
-  })
-);
+app.use(cors({
+  origin: "https://slots.darksideorg.com",
+  credentials: true,
+}));
 
 app.use(express.json({ limit: "2mb" }));
 
