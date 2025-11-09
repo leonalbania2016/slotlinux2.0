@@ -5,7 +5,15 @@ import GuildSelector from "./components/GuildSelector";
 import ChannelSelector from "./components/ChannelSelector";
 import BackgroundPicker from "./components/BackgroundPicker";
 import SlotsEditor from "./components/SlotsEditor";
-import { saveSlots, sendToDiscord, getInviteUrl, getCurrentUser } from "./api";
+import {
+  saveSlots,
+  sendToDiscord,
+  getInviteUrl,
+  getCurrentUser,
+  getGuilds,
+  getChannels,
+  getEmojis,
+} from "./api";
 
 // ---------- Types ----------
 interface UserMe {
@@ -18,6 +26,7 @@ interface UserMe {
 interface Guild {
   id: string;
   name: string;
+  icon?: string | null;
 }
 
 interface Channel {
@@ -29,6 +38,7 @@ interface Emoji {
   id: string;
   name: string;
   animated?: boolean;
+  url?: string;
 }
 
 interface Slot {
@@ -55,18 +65,23 @@ function App() {
   const [count, setCount] = useState<number>(5);
   const [slots, setSlots] = useState<Slot[]>([]);
 
-  // ---- 1) Check session on mount ----
+  // ---- 1) Check session and fetch guilds on mount ----
   useEffect(() => {
     (async () => {
       try {
-        const user = await getCurrentUser(); // GET /api/me with credentials
+        const user = await getCurrentUser();
         if (user && user.username) {
           setMe(user);
           setAuthed(true);
+
+          // ✅ Fetch guilds after successful login
+          const guildList = await getGuilds();
+          setGuilds(guildList);
         } else {
           setAuthed(false);
         }
       } catch (err) {
+        console.warn("Session check failed:", err);
         setAuthed(false);
       } finally {
         setLoading(false);
@@ -74,7 +89,33 @@ function App() {
     })();
   }, []);
 
-  // ---- 2) Keep slots array length in sync with count ----
+  // ---- 2) Fetch channels when guild changes ----
+  useEffect(() => {
+    if (!guildId) return;
+    (async () => {
+      try {
+        const chans = await getChannels(guildId);
+        setChannels(chans);
+      } catch (err) {
+        console.error("Failed to fetch channels:", err);
+      }
+    })();
+  }, [guildId]);
+
+  // ---- 3) Fetch emojis when guild changes ----
+  useEffect(() => {
+    if (!guildId) return;
+    (async () => {
+      try {
+        const emo = await getEmojis(guildId);
+        setEmojis(emo);
+      } catch (err) {
+        console.error("Failed to fetch emojis:", err);
+      }
+    })();
+  }, [guildId]);
+
+  // ---- 4) Keep slots array length in sync with count ----
   useEffect(() => {
     setSlots((prev: Slot[]) => {
       const arr: Slot[] = [...prev];
@@ -89,14 +130,14 @@ function App() {
     });
   }, [count]);
 
-  // ---- 3) Slot helpers ----
+  // ---- 5) Slot helpers ----
   function setSlotEmoji(idx: number, emojiId: string) {
     setSlots((prev: Slot[]) =>
       prev.map((s, i) => (i === idx ? { ...s, emoji: emojiId } : s))
     );
   }
 
-  // ---- 4) Actions ----
+  // ---- 6) Actions ----
   async function onSave() {
     if (!guildId) return alert("Pick a guild first");
     if (!background) return alert("Pick a background GIF");
@@ -122,7 +163,7 @@ function App() {
     window.open(url, "_blank");
   }
 
-  // ---- 5) Loading state (prevents flicker) ----
+  // ---- 7) Loading state ----
   if (loading) {
     return (
       <>
@@ -134,7 +175,7 @@ function App() {
     );
   }
 
-  // ---- 6) Not authed -> show login ----
+  // ---- 8) Not authed -> show login ----
   if (!authed) {
     return (
       <>
@@ -144,10 +185,10 @@ function App() {
     );
   }
 
-  // ---- 7) Main app ----
+  // ---- 9) Main app ----
   return (
     <>
-      <TopBar user={me} onLogout={() => setAuthed(false)} />
+      <TopBar />
       <div className="max-w-6xl mx-auto p-6 space-y-6">
         <div className="flex items-center gap-3">
           <div className="text-lg">
@@ -173,7 +214,10 @@ function App() {
               value={channelId}
               onChange={setChannelId}
             />
-            <BackgroundPicker value={background} onChange={setBackground} />
+            <BackgroundPicker
+              value={background}
+              onChange={setBackground}
+            />
           </div>
 
           <div className="md:col-span-2 space-y-4">

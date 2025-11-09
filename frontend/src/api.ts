@@ -26,7 +26,7 @@ async function apiFetch(path: string, options: RequestInit = {}) {
   return res.json();
 }
 
-// ✅ 3️⃣ API functions
+// ---------- SLOT ROUTES ----------
 export async function saveSlots(guildId: string, data: any) {
   return apiFetch(`/api/slots/${guildId}`, {
     method: "POST",
@@ -45,16 +45,21 @@ export async function getInviteUrl() {
   return data.url;
 }
 
-// ✅ 4️⃣ Safer version of getCurrentUser (no error if 401)
+// ---------- AUTH ROUTES ----------
 export async function getCurrentUser() {
-  const res = await fetch(`${API_URL}/api/me`, {
-    credentials: "include", // important for cookies
-  });
+  return apiFetch(`/api/me`);
+}
 
-  if (!res.ok) {
-    // 401 means not logged in, so return null instead of throwing
-    return null;
-  }
+// ---------- DISCORD ROUTES ----------
+// ✅ These three are required for App.tsx
+export async function getGuilds() {
+  return apiFetch(`/api/discord/guilds`);
+}
 
-  return res.json();
+export async function getChannels(guildId: string) {
+  return apiFetch(`/api/discord/guilds/${guildId}/channels`);
+}
+
+export async function getEmojis(guildId: string) {
+  return apiFetch(`/api/discord/guilds/${guildId}/emojis`);
 }
