@@ -21,26 +21,21 @@ app.set("trust proxy", 1);
 // ✅ 2. Allow your frontend domain explicitly (NO trailing slash)
 app.use(
   cors({
-    origin: [
-      "https://slotlinux2-0-a4zz.onrender.com", // your frontend
-    ],
+    origin: process.env.FRONTEND_URL, // https://slots.darksideorg.com
     credentials: true,
   })
 );
 
-app.use(express.json({ limit: "2mb" }));
-
-// ✅ 3. Session cookie configuration for cross-site HTTPS cookies
 app.use(
   session({
-    secret: process.env.SESSION_SECRET || "devsecret",
+    secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      secure: true, // Required for HTTPS
-      sameSite: "none", // Required for cross-origin cookies
-      maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
+      secure: true, // HTTPS only
+      sameSite: 'none', // cross-domain cookies need this
+      maxAge: 1000 * 60 * 60 * 24 * 7,
     },
   })
 );

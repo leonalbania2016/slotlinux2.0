@@ -15,12 +15,12 @@ router.get(
     }
 
     // ✅ Fix redirect for Render
-    const redirect =
-      process.env.NODE_ENV === "production"
-        ? "https://slotlinux2-0-a4zz.onrender.com"
-        : process.env.FRONTEND_URL || "http://localhost:5173";
+const redirect =
+  process.env.NODE_ENV === "production"
+    ? process.env.FRONTEND_URL // https://slots.darksideorg.com
+    : "http://localhost:5173";
 
-    res.redirect(redirect);
+res.redirect(redirect);
   }
 );
 
