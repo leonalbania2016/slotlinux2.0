@@ -1,20 +1,23 @@
+# Use full Node (not Alpine) for Prisma compatibility
 FROM node:18
 
 WORKDIR /app
 
+# Copy dependency files first
 COPY package*.json ./
 
-# Install dependencies first
-RUN npm install
+# Install all dependencies (includes @prisma/client if listed)
+RUN npm ci
 
-# Copy project files
+# Copy the rest of your project
 COPY . .
 
-# Ensure both prisma & client are present
-RUN npm install prisma @prisma/client --save-dev && \
-    chmod +x node_modules/.bin/prisma && \
+# Ensure both prisma & client exist and generate Prisma client
+RUN npm install --save-dev prisma @prisma/client && \
     npx prisma generate
 
+# Expose backend port
 EXPOSE 8080
 
+# Start your backend
 CMD ["npm", "run", "start"]
