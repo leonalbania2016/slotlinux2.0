@@ -1,21 +1,15 @@
-FROM node:20-alpine
+# Build backend
+FROM node:18
 
 WORKDIR /app
-
-# Copy dependency manifests
 COPY package*.json ./
 
-# Install dependencies
-RUN npm ci --no-audit --no-fund
+RUN npm ci
 
-# Copy app files
 COPY . .
 
-# Run Prisma setup at build time
-RUN npx prisma generate
+# Prisma fix
+RUN npm install prisma --save-dev && chmod +x node_modules/.bin/prisma && npx prisma generate
 
-# Expose API port
 EXPOSE 8080
-
-# Run migrations automatically when container starts
-CMD npx prisma migrate deploy && npm start
+CMD ["npm", "run", "start"]
