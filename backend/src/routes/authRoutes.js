@@ -3,13 +3,21 @@ import passport from "passport";
 
 const router = express.Router();
 
+// 🟢 Step 1: Discord login entry point
 router.get("/discord", passport.authenticate("discord"));
 
+// 🟢 Step 2: Discord OAuth callback
 router.get(
   "/discord/callback",
   passport.authenticate("discord", { failureRedirect: "/" }),
   (req, res) => {
     console.log("🎉 Discord login successful:", req.user);
+
+    // ✅ Store OAuth tokens in session for later API calls
+    if (req.user && req.user._oauth) {
+      req.session.oauth = req.user._oauth;
+      console.log("💾 Saved tokens to session:", req.session.oauth);
+    }
 
     // ✅ Make sure session is saved before redirect
     req.session.save(() => {
@@ -23,17 +31,7 @@ router.get(
   }
 );
 
-
-router.post("/logout", (req, res) => {
-  req.logout(() => {
-    req.session.destroy(() => {
-      res.clearCookie("connect.sid");
-      res.json({ ok: true });
-    });
-  });
-});
-
-// ✅ Logout route
+// 🟢 Step 3: Logout route (safe version)
 router.post("/logout", (req, res) => {
   req.logout(err => {
     if (err) {

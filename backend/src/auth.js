@@ -6,6 +6,8 @@ import dotenv from "dotenv";
 dotenv.config();
 
 export function configurePassport() {
+// backend/auth.js
+
 passport.use(
   new DiscordStrategy(
     {
@@ -16,9 +18,8 @@ passport.use(
     },
     async (accessToken, refreshToken, profile, done) => {
       try {
-        console.log("🔑 Received Discord OAuth tokens for:", profile.username);
-
-        const user = await prisma.user.upsert({
+        // ✅ Store tokens along with user
+        let user = await prisma.user.upsert({
           where: { discordId: profile.id },
           update: {
             username: profile.username,
@@ -37,7 +38,9 @@ passport.use(
           },
         });
 
-        console.log("✅ User upserted with token:", user.username);
+        // ✅ also attach tokens to session
+        user._oauth = { accessToken, refreshToken };
+
         return done(null, user);
       } catch (err) {
         console.error("❌ Error in DiscordStrategy:", err);
@@ -46,6 +49,7 @@ passport.use(
     }
   )
 );
+
 
   // ✅ Serialize user by `id`
   passport.serializeUser((user, done) => {
