@@ -5,28 +5,83 @@ import GuildSelector from './components/GuildSelector';
 import ChannelSelector from './components/ChannelSelector';
 import BackgroundPicker from './components/BackgroundPicker';
 import SlotsEditor from './components/SlotsEditor';
-import { saveSlots, sendToDiscord, getInviteUrl } from './api';
-import { useMe, useGuilds, useChannels, useEmojis } from './hooks';
+import { saveSlots, sendToDiscord, getInviteUrl, getCurrentUser } from './api';
 
+// ---------- Types ----------
+interface UserMe {
+  id?: string;
+  username?: string;
+  discriminator?: string;
+  avatar?: string | null;
+}
+
+interface Guild {
+  id: string;
+  name: string;
+}
+
+interface Channel {
+  id: string;
+  name: string;
+}
+
+interface Emoji {
+  id: string;
+  name: string;
+  animated?: boolean;
+}
+
+interface Slot {
+  position: number;
+  emoji: string; // store emoji id
+}
+
+// ---------- Component ----------
 function App() {
-  const [authed, setAuthed] = useState(false);
-  const [guilds, setGuilds] = useState([]);
-  const [guildId, setGuildId] = useState('');
-  const [channels, setChannels] = useState([]);
-  const [channelId, setChannelId] = useState('');
-  const [background, setBackground] = useState('');
-  const [count, setCount] = useState(5);
-  const [slots, setSlots] = useState([]);
-  const [me, setMe] = useState({ username: '' });
-  const [emojis, setEmojis] = useState([]);
+  // auth/session
+  const [loading, setLoading] = useState<boolean>(true);
+  const [authed, setAuthed] = useState<boolean>(false);
+  const [me, setMe] = useState<UserMe>({});
 
-  // Ensure slots length matches count
+  // data
+  const [guilds, setGuilds] = useState<Guild[]>([]);
+  const [guildId, setGuildId] = useState<string>('');
+  const [channels, setChannels] = useState<Channel[]>([]);
+  const [channelId, setChannelId] = useState<string>('');
+  const [emojis, setEmojis] = useState<Emoji[]>([]);
+
+  // slots
+  const [background, setBackground] = useState<string>('');
+  const [count, setCount] = useState<number>(5);
+  const [slots, setSlots] = useState<Slot[]>([]);
+
+  // ---- 1) Check session on mount ----
   useEffect(() => {
-    setSlots(prev => {
-      const arr = [...prev];
+    (async () => {
+      try {
+        const user = await getCurrentUser(); // GET /api/me with credentials
+        setMe(user);
+        setAuthed(true);
+        // TODO: you likely fetch guilds/channels/emojis here after auth:
+        // setGuilds(await fetchGuilds());
+        // setChannels(await fetchChannels(selectedGuildId));
+        // setEmojis(await fetchEmojis(selectedGuildId));
+      } catch (err) {
+        setAuthed(false);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  // ---- 2) Keep slots array length in sync with count ----
+  useEffect(() => {
+    setSlots((prev: Slot[]) => {
+      const arr: Slot[] = [...prev];
       if (arr.length < count) {
-        for (let i = arr.length; i < count; i++)
+        for (let i = arr.length; i < count; i++) {
           arr.push({ position: i, emoji: '' });
+        }
       } else if (arr.length > count) {
         arr.length = count;
       }
@@ -34,19 +89,21 @@ function App() {
     });
   }, [count]);
 
+  // ---- 3) Slot helpers ----
   function setSlotEmoji(idx: number, emojiId: string) {
-    setSlots(prev =>
+    setSlots((prev: Slot[]) =>
       prev.map((s, i) => (i === idx ? { ...s, emoji: emojiId } : s))
     );
   }
 
+  // ---- 4) Actions ----
   async function onSave() {
     if (!guildId) return alert('Pick a guild first');
     if (!background) return alert('Pick a background GIF');
     const payload = {
       background,
       slotCount: count,
-      slots: slots.map(s => ({ emoji: s.emoji || '' })),
+      slots: slots.map((s) => ({ emoji: s.emoji || '' })),
     };
     await saveSlots(guildId, payload);
     alert('Saved!');
@@ -65,14 +122,29 @@ function App() {
     window.open(url, '_blank');
   }
 
-  if (!authed)
+  // ---- 5) Loading state (prevents flicker) ----
+  if (loading) {
+    return (
+      <>
+        <TopBar />
+        <div className="min-h-[60vh] flex items-center justify-center text-slate-300">
+          <div className="animate-pulse">Checking your session…</div>
+        </div>
+      </>
+    );
+  }
+
+  // ---- 6) Not authed -> show login ----
+  if (!authed) {
     return (
       <>
         <TopBar />
         <LoginGate />
       </>
     );
+  }
 
+  // ---- 7) Main app ----
   return (
     <>
       <TopBar />
@@ -91,16 +163,8 @@ function App() {
 
         <div className="grid md:grid-cols-3 gap-6">
           <div className="space-y-4 md:col-span-1">
-            <GuildSelector
-              guilds={guilds}
-              value={guildId}
-              onChange={setGuildId}
-            />
-            <ChannelSelector
-              channels={channels}
-              value={channelId}
-              onChange={setChannelId}
-            />
+            <GuildSelector guilds={guilds} value={guildId} onChange={setGuildId} />
+            <ChannelSelector channels={channels} value={channelId} onChange={setChannelId} />
             <BackgroundPicker value={background} onChange={setBackground} />
           </div>
 
