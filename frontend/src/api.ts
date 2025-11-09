@@ -45,7 +45,16 @@ export async function getInviteUrl() {
   return data.url;
 }
 
-// ✅ 4️⃣ Add this (if not already existing in another file)
+// ✅ 4️⃣ Safer version of getCurrentUser (no error if 401)
 export async function getCurrentUser() {
-  return apiFetch(`/api/me`);
+  const res = await fetch(`${API_URL}/api/me`, {
+    credentials: "include", // important for cookies
+  });
+
+  if (!res.ok) {
+    // 401 means not logged in, so return null instead of throwing
+    return null;
+  }
+
+  return res.json();
 }

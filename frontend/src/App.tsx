@@ -56,23 +56,24 @@ function App() {
   const [slots, setSlots] = useState<Slot[]>([]);
 
   // ---- 1) Check session on mount ----
-  useEffect(() => {
-    (async () => {
-      try {
-        const user = await getCurrentUser(); // GET /api/me with credentials
+useEffect(() => {
+  (async () => {
+    try {
+      const user = await getCurrentUser(); // GET /api/me with credentials
+      if (user && user.username) {
         setMe(user);
         setAuthed(true);
-        // TODO: you likely fetch guilds/channels/emojis here after auth:
-        // setGuilds(await fetchGuilds());
-        // setChannels(await fetchChannels(selectedGuildId));
-        // setEmojis(await fetchEmojis(selectedGuildId));
-      } catch (err) {
+      } else {
         setAuthed(false);
-      } finally {
-        setLoading(false);
       }
-    })();
-  }, []);
+    } catch (err) {
+      setAuthed(false);
+    } finally {
+      setLoading(false);
+    }
+  })();
+}, []);
+
 
   // ---- 2) Keep slots array length in sync with count ----
   useEffect(() => {
