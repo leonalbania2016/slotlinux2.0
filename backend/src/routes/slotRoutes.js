@@ -36,51 +36,51 @@ router.post("/:guildId", ensureAuthed, async (req, res) => {
     const userId = req.user.id;
     const { background, slotCount, slots } = req.body;
 
-    // ✅ Validate input
     if (typeof slotCount !== "number" || slotCount < 2 || slotCount > 25) {
       return res.status(400).json({ error: "slotCount must be between 2 and 25" });
     }
-    if (!background) return res.status(400).json({ error: "background is required" });
+    if (!background) {
+      return res.status(400).json({ error: "background is required" });
+    }
     if (!Array.isArray(slots) || slots.length !== slotCount) {
       return res.status(400).json({ error: "slots length must equal slotCount" });
     }
 
-    // ✅ 1️⃣ Ensure the guild exists (avoids foreign key constraint errors)
-    let guild = await prisma.guild.findUnique({ where: { guildId } });
-    if (!guild) {
-      guild = await prisma.guild.create({
-        data: {
-          guildId,
-          name: `Guild ${guildId}`,
-        },
-      });
-      console.log(`✅ Created missing guild ${guildId}`);
-    }
+    // ✅ Ensure the Guild exists before linking (avoid foreign key errors)
+    await prisma.guild.upsert({
+      where: { guildId },
+      update: {},
+      create: { guildId, name: `Guild ${guildId}` },
+    });
 
-    // ✅ 2️⃣ Upsert slot configuration
+    // ✅ Upsert slot config (create if not exists)
     const upsert = await prisma.slotConfig.upsert({
       where: { userId_guildId: { userId, guildId } },
       create: { userId, guildId, background, slotCount },
       update: { background, slotCount },
     });
 
-    // ✅ 3️⃣ Upsert each slot (by position)
+    // ✅ Upsert each slot (by position)
     const ops = slots.map((s, idx) =>
       prisma.slot.upsert({
-        where: {
-          slotConfigId_position: { slotConfigId: upsert.id, position: idx },
-        },
+        where: { slotConfigId_position: { slotConfigId: upsert.id, position: idx } },
         create: {
           slotConfigId: upsert.id,
           position: idx,
-          emoji: s.emoji || "",
+          emoji: s.emoji,
+          teamName: s.teamName || null,
+          teamTag: s.teamTag || null,
         },
-        update: { emoji: s.emoji || "" },
+        update: {
+          emoji: s.emoji,
+          teamName: s.teamName || null,
+          teamTag: s.teamTag || null,
+        },
       })
     );
+
     await Promise.all(ops);
 
-    // ✅ 4️⃣ Return final config
     const result = await prisma.slotConfig.findUnique({
       where: { id: upsert.id },
       include: { slots: true },
@@ -116,22 +116,31 @@ router.post("/:guildId/send", ensureAuthed, async (req, res) => {
       return res.status(400).json({ error: "No slot config found for this guild" });
     }
 
-    // ✅ Build message
-    const header = `**🎰 Slot Manager Update**
-Guild: ${guildId}
-Background: ${cfg.background}
-Slots (${cfg.slotCount}):`;
+    // 🧠 Build message — start from slot #2 (position >= 1), no "#" prefix
+    const header = `**🎰 Slot Manager Update**\nGuild: ${guildId}\nBackground: ${cfg.background}\nSlots (${cfg.slotCount - 1}):`;
+
     const list = cfg.slots
       .sort((a, b) => a.position - b.position)
-      .map((s) => `#${s.position + 1}: ${s.emoji || "❓"}`)
+      .filter((s) => s.position >= 1) // start from slot 2
+      .map((s) => {
+        const team = s.teamName || "Empty";
+        const tag = s.teamTag ? `[${s.teamTag}]` : "";
+        const emoji = s.emoji
+          ? /^\d+$/.test(s.emoji)
+            ? `<:${s.emoji}:${s.emoji}>`
+            : s.emoji
+          : "❓";
+        return `${team} ${tag} ${emoji}`.trim();
+      })
       .join("\n");
+
     const content = `${header}\n\n${list}`;
 
-    // ✅ Send or update Discord message
+    // 📨 Send or update the Discord message
     const bot = await getBotGuilds();
     const sent = await bot.sendOrEditMessage(channelId, content, null, cfg.messageId);
 
-    // ✅ Save sent message info
+    // 💾 Save message info
     await prisma.slotConfig.update({
       where: { id: cfg.id },
       data: { messageId: sent.id, channelId },
