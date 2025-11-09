@@ -1,253 +1,235 @@
-import React, { useEffect, useState } from "react";
-import TopBar from "./components/TopBar";
-import LoginGate from "./components/LoginGate";
-import GuildSelector from "./components/GuildSelector";
-import ChannelSelector from "./components/ChannelSelector";
-import BackgroundPicker from "./components/BackgroundPicker";
-import SlotsEditor from "./components/SlotsEditor";
+import { useEffect, useState } from "react";
 import {
-  saveSlots,
-  sendToDiscord,
-  getInviteUrl,
   getCurrentUser,
   getGuilds,
   getChannels,
   getEmojis,
+  saveSlots,
+  sendToDiscord,
 } from "./api";
 
-// ---------- Types ----------
-interface UserMe {
-  id?: string;
-  username?: string;
-  discriminator?: string;
-  avatar?: string | null;
-}
-
-interface Guild {
-  id: string;
-  name: string;
-  icon?: string | null;
-}
-
-interface Channel {
-  id: string;
-  name: string;
-}
-
-interface Emoji {
-  id: string;
-  name: string;
-  animated?: boolean;
-  url?: string;
-}
-
 interface Slot {
-  position: number;
-  emoji: string; // store emoji id
+  emoji: string;
+  teamName: string;
+  teamTag: string;
 }
 
-// ---------- Component ----------
-function App() {
-  // auth/session
-  const [loading, setLoading] = useState<boolean>(true);
-  const [authed, setAuthed] = useState<boolean>(false);
-  const [me, setMe] = useState<UserMe>({});
-
-  // data
-  const [guilds, setGuilds] = useState<Guild[]>([]);
-  const [guildId, setGuildId] = useState<string>("");
-  const [channels, setChannels] = useState<Channel[]>([]);
-  const [channelId, setChannelId] = useState<string>("");
-  const [emojis, setEmojis] = useState<Emoji[]>([]);
-
-  // slots
-  const [background, setBackground] = useState<string>("");
-  const [count, setCount] = useState<number>(5);
+export default function App() {
+  const [user, setUser] = useState<any>(null);
+  const [guilds, setGuilds] = useState<any[]>([]);
+  const [channels, setChannels] = useState<any[]>([]);
+  const [selectedGuild, setSelectedGuild] = useState<string>("");
+  const [selectedChannel, setSelectedChannel] = useState<string>("");
   const [slots, setSlots] = useState<Slot[]>([]);
+  const [background, setBackground] = useState<string>("default-bg.gif");
+  const [isSaving, setIsSaving] = useState(false);
+  const [isSending, setIsSending] = useState(false);
 
-  // ---- 1) Check session and fetch guilds on mount ----
+  // Load user + guilds
   useEffect(() => {
     (async () => {
-      try {
-        const user = await getCurrentUser();
-        if (user && user.username) {
-          setMe(user);
-          setAuthed(true);
+      const u = await getCurrentUser();
+      setUser(u);
 
-          // ✅ Fetch guilds after successful login
-          const guildList = await getGuilds();
-          setGuilds(guildList);
-        } else {
-          setAuthed(false);
-        }
-      } catch (err) {
-        console.warn("Session check failed:", err);
-        setAuthed(false);
-      } finally {
-        setLoading(false);
-      }
+      const g = await getGuilds();
+      setGuilds(g);
+
+      // Initialize 25 empty slots
+      setSlots(
+        Array.from({ length: 25 }, () => ({
+          emoji: "",
+          teamName: "",
+          teamTag: "",
+        }))
+      );
     })();
   }, []);
 
-  // ---- 2) Fetch channels when guild changes ----
+  // Load channels for selected guild
   useEffect(() => {
-    if (!guildId) return;
-    (async () => {
-      try {
-        const chans = await getChannels(guildId);
-        setChannels(chans);
-      } catch (err) {
-        console.error("Failed to fetch channels:", err);
-      }
-    })();
-  }, [guildId]);
+    if (selectedGuild) {
+      (async () => {
+        const ch = await getChannels(selectedGuild);
+        setChannels(ch);
+      })();
+    }
+  }, [selectedGuild]);
 
-  // ---- 3) Fetch emojis when guild changes ----
-  useEffect(() => {
-    if (!guildId) return;
-    (async () => {
-      try {
-        const emo = await getEmojis(guildId);
-        setEmojis(emo);
-      } catch (err) {
-        console.error("Failed to fetch emojis:", err);
-      }
-    })();
-  }, [guildId]);
+  const handleSlotChange = (index: number, field: keyof Slot, value: string) => {
+    const newSlots = [...slots];
+    newSlots[index][field] = value;
+    setSlots(newSlots);
+  };
 
-  // ---- 4) Keep slots array length in sync with count ----
-  useEffect(() => {
-    setSlots((prev: Slot[]) => {
-      const arr: Slot[] = [...prev];
-      if (arr.length < count) {
-        for (let i = arr.length; i < count; i++) {
-          arr.push({ position: i, emoji: "" });
-        }
-      } else if (arr.length > count) {
-        arr.length = count;
-      }
-      return arr.map((s, i) => ({ ...s, position: i }));
-    });
-  }, [count]);
+  const handleSave = async () => {
+    if (!selectedGuild) return alert("Select a guild first.");
+    setIsSaving(true);
 
-  // ---- 5) Slot helpers ----
-  function setSlotEmoji(idx: number, emojiId: string) {
-    setSlots((prev: Slot[]) =>
-      prev.map((s, i) => (i === idx ? { ...s, emoji: emojiId } : s))
-    );
-  }
+    try {
+      await saveSlots(selectedGuild, {
+        background,
+        slots,
+      });
+      alert("✅ Slots saved successfully!");
+    } catch (err: any) {
+      console.error(err);
+      alert("❌ Failed to save slots: " + err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
-  // ---- 6) Actions ----
-  async function onSave() {
-    if (!guildId) return alert("Pick a guild first");
-    if (!background) return alert("Pick a background GIF");
-    const payload = {
-      background,
-      slotCount: count,
-      slots: slots.map((s) => ({ emoji: s.emoji || "" })),
-    };
-    await saveSlots(guildId, payload);
-    alert("Saved!");
-  }
+  const handleSend = async () => {
+    if (!selectedGuild || !selectedChannel)
+      return alert("Select guild and channel first.");
+    setIsSending(true);
 
-  async function onSend() {
-    if (!guildId) return alert("Pick a guild first");
-    if (!channelId) return alert("Pick a channel");
-    await onSave();
-    await sendToDiscord(guildId, channelId);
-    alert("Sent to Discord (or updated existing message).");
-  }
+    try {
+      await sendToDiscord(selectedGuild, selectedChannel);
+      alert("✅ Slots sent to Discord!");
+    } catch (err: any) {
+      console.error(err);
+      alert("❌ Failed to send to Discord: " + err.message);
+    } finally {
+      setIsSending(false);
+    }
+  };
 
-  async function onInviteBot() {
-    const url = await getInviteUrl();
-    window.open(url, "_blank");
-  }
-
-  // ---- 7) Loading state ----
-  if (loading) {
-    return (
-      <>
-        <TopBar />
-        <div className="min-h-[60vh] flex items-center justify-center text-slate-300">
-          <div className="animate-pulse">Checking your session…</div>
-        </div>
-      </>
-    );
-  }
-
-  // ---- 8) Not authed -> show login ----
-  if (!authed) {
-    return (
-      <>
-        <TopBar />
-        <LoginGate />
-      </>
-    );
-  }
-
-  // ---- 9) Main app ----
   return (
-    <>
-      <TopBar />
-      <div className="max-w-6xl mx-auto p-6 space-y-6">
-        <div className="flex items-center gap-3">
-          <div className="text-lg">
-            Hello, <b>{me.username}</b>
-          </div>
-          <button
-            onClick={onInviteBot}
-            className="text-xs border border-slate-700 rounded px-2 py-1 hover:bg-slate-800"
-          >
-            Invite bot
-          </button>
-        </div>
+    <div className="min-h-screen bg-neutral-950 text-gray-100 p-6">
+      <h1 className="text-3xl font-bold mb-6 text-center">
+        🎰 Slot Manager Panel
+      </h1>
 
-        <div className="grid md:grid-cols-3 gap-6">
-          <div className="space-y-4 md:col-span-1">
-            <GuildSelector
-              guilds={guilds}
-              value={guildId}
-              onChange={setGuildId}
-            />
-            <ChannelSelector
-              channels={channels}
-              value={channelId}
-              onChange={setChannelId}
-            />
-            <BackgroundPicker
-              value={background}
-              onChange={setBackground}
-            />
-          </div>
-
-          <div className="md:col-span-2 space-y-4">
-            <SlotsEditor
-              count={count}
-              slots={slots}
-              setCount={setCount}
-              setSlotEmoji={setSlotEmoji}
-              emojis={emojis}
-            />
-          </div>
-        </div>
-
-        <div className="flex gap-3">
-          <button
-            onClick={onSave}
-            className="bg-emerald-600 hover:bg-emerald-500 px-5 py-3 rounded-lg"
-          >
-            Save All Slots
-          </button>
-          <button
-            onClick={onSend}
-            className="bg-indigo-600 hover:bg-indigo-500 px-5 py-3 rounded-lg"
-          >
-            Send / Update in Discord
-          </button>
-        </div>
+      {/* GUILD SELECT */}
+      <div className="mb-4">
+        <label className="block text-sm font-semibold mb-1">Select Guild</label>
+        <select
+          className="bg-neutral-800 rounded px-3 py-2 w-full"
+          value={selectedGuild}
+          onChange={(e) => setSelectedGuild(e.target.value)}
+        >
+          <option value="">-- Choose a Guild --</option>
+          {guilds.map((g) => (
+            <option key={g.id} value={g.id}>
+              {g.name}
+            </option>
+          ))}
+        </select>
       </div>
-    </>
+
+      {/* CHANNEL SELECT */}
+      {channels.length > 0 && (
+        <div className="mb-4">
+          <label className="block text-sm font-semibold mb-1">
+            Select Channel
+          </label>
+          <select
+            className="bg-neutral-800 rounded px-3 py-2 w-full"
+            value={selectedChannel}
+            onChange={(e) => setSelectedChannel(e.target.value)}
+          >
+            <option value="">-- Choose a Channel --</option>
+            {channels.map((c) => (
+              <option key={c.id} value={c.id}>
+                #{c.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {/* BACKGROUND INPUT */}
+      <div className="mb-4">
+        <label className="block text-sm font-semibold mb-1">
+          Background (filename)
+        </label>
+        <input
+          type="text"
+          value={background}
+          onChange={(e) => setBackground(e.target.value)}
+          className="bg-neutral-800 rounded px-3 py-2 w-full"
+          placeholder="red-darkside.gif"
+        />
+      </div>
+
+      {/* SLOTS TABLE */}
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-sm border border-neutral-800">
+          <thead className="bg-neutral-900 text-gray-300">
+            <tr>
+              <th className="p-2 border-b border-neutral-800">Slot #</th>
+              <th className="p-2 border-b border-neutral-800">Team Name</th>
+              <th className="p-2 border-b border-neutral-800">Team Tag</th>
+              <th className="p-2 border-b border-neutral-800">Emoji</th>
+            </tr>
+          </thead>
+          <tbody>
+            {slots.map((slot, i) => (
+              <tr
+                key={i}
+                className={
+                  i % 2 === 0 ? "bg-neutral-800" : "bg-neutral-900"
+                }
+              >
+                <td className="p-2 text-center">{i + 1}</td>
+                <td className="p-2">
+                  <input
+                    type="text"
+                    value={slot.teamName}
+                    onChange={(e) =>
+                      handleSlotChange(i, "teamName", e.target.value)
+                    }
+                    className="bg-neutral-700 rounded px-2 py-1 w-full"
+                    placeholder="Team Name"
+                  />
+                </td>
+                <td className="p-2">
+                  <input
+                    type="text"
+                    value={slot.teamTag}
+                    onChange={(e) =>
+                      handleSlotChange(i, "teamTag", e.target.value)
+                    }
+                    className="bg-neutral-700 rounded px-2 py-1 w-full"
+                    placeholder="TAG"
+                  />
+                </td>
+                <td className="p-2">
+                  <input
+                    type="text"
+                    value={slot.emoji}
+                    onChange={(e) =>
+                      handleSlotChange(i, "emoji", e.target.value)
+                    }
+                    className="bg-neutral-700 rounded px-2 py-1 w-full"
+                    placeholder="🔥"
+                  />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* ACTION BUTTONS */}
+      <div className="mt-6 flex gap-4 justify-center">
+        <button
+          onClick={handleSave}
+          disabled={isSaving}
+          className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded disabled:opacity-50"
+        >
+          {isSaving ? "Saving..." : "💾 Save Slots"}
+        </button>
+
+        <button
+          onClick={handleSend}
+          disabled={isSending}
+          className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded disabled:opacity-50"
+        >
+          {isSending ? "Sending..." : "🚀 Send to Discord"}
+        </button>
+      </div>
+    </div>
   );
 }
-
-export default App;
