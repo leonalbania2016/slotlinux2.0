@@ -54,7 +54,7 @@ app.get("/healthz", (_req, res) => res.json({ ok: true }));
 app.use("/auth", authRoutes);
 app.use("/api", userRoutes);
 app.use("/api/discord", discordRoutes);
-app.use("/api", slotRoutes);
+app.use("/api/slots", slotRoutes);
 
 // Error handling
 app.use((err, _req, res, _next) => {
