@@ -6,45 +6,46 @@ import dotenv from "dotenv";
 dotenv.config();
 
 export function configurePassport() {
-  passport.use(
-    new DiscordStrategy(
-      {
-        clientID: process.env.DISCORD_CLIENT_ID,
-        clientSecret: process.env.DISCORD_CLIENT_SECRET,
-        callbackURL: process.env.DISCORD_REDIRECT_URI,
-        scope: ["identify", "email", "guilds"],
-      },
-      async (accessToken, refreshToken, profile, done) => {
-        try {
-          // ✅ Upsert ensures user exists or updates their info
-          const user = await prisma.user.upsert({
-            where: { discordId: profile.id },
-            update: {
-              username: profile.username,
-              discriminator: profile.discriminator || "0",
-              avatar: profile.avatar,
-              accessToken,
-              refreshToken,
-            },
-            create: {
-              discordId: profile.id,
-              username: profile.username,
-              discriminator: profile.discriminator || "0",
-              avatar: profile.avatar,
-              accessToken,
-              refreshToken,
-            },
-          });
+passport.use(
+  new DiscordStrategy(
+    {
+      clientID: process.env.DISCORD_CLIENT_ID,
+      clientSecret: process.env.DISCORD_CLIENT_SECRET,
+      callbackURL: process.env.DISCORD_REDIRECT_URI,
+      scope: ["identify", "email", "guilds"],
+    },
+    async (accessToken, refreshToken, profile, done) => {
+      try {
+        console.log("🔑 Received Discord OAuth tokens for:", profile.username);
 
-          console.log("🎉 Discord login successful:", user);
-          return done(null, user);
-        } catch (err) {
-          console.error("❌ Error in DiscordStrategy:", err);
-          return done(err, null);
-        }
+        const user = await prisma.user.upsert({
+          where: { discordId: profile.id },
+          update: {
+            username: profile.username,
+            discriminator: profile.discriminator,
+            avatar: profile.avatar,
+            accessToken,
+            refreshToken,
+          },
+          create: {
+            discordId: profile.id,
+            username: profile.username,
+            discriminator: profile.discriminator,
+            avatar: profile.avatar,
+            accessToken,
+            refreshToken,
+          },
+        });
+
+        console.log("✅ User upserted with token:", user.username);
+        return done(null, user);
+      } catch (err) {
+        console.error("❌ Error in DiscordStrategy:", err);
+        return done(err, null);
       }
-    )
-  );
+    }
+  )
+);
 
   // ✅ Serialize user by `id`
   passport.serializeUser((user, done) => {
