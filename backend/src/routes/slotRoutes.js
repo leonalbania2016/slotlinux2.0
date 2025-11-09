@@ -36,24 +36,35 @@ router.post("/:guildId", ensureAuthed, async (req, res) => {
     const userId = req.user.id;
     const { background, slotCount, slots } = req.body;
 
+    // ✅ Validate input
     if (typeof slotCount !== "number" || slotCount < 2 || slotCount > 25) {
       return res.status(400).json({ error: "slotCount must be between 2 and 25" });
     }
-    if (!background) {
-      return res.status(400).json({ error: "background is required" });
-    }
+    if (!background) return res.status(400).json({ error: "background is required" });
     if (!Array.isArray(slots) || slots.length !== slotCount) {
       return res.status(400).json({ error: "slots length must equal slotCount" });
     }
 
-    // Upsert slot config (create if not exists)
+    // ✅ 1️⃣ Ensure the guild exists (avoids foreign key constraint errors)
+    let guild = await prisma.guild.findUnique({ where: { guildId } });
+    if (!guild) {
+      guild = await prisma.guild.create({
+        data: {
+          guildId,
+          name: `Guild ${guildId}`,
+        },
+      });
+      console.log(`✅ Created missing guild ${guildId}`);
+    }
+
+    // ✅ 2️⃣ Upsert slot configuration
     const upsert = await prisma.slotConfig.upsert({
       where: { userId_guildId: { userId, guildId } },
       create: { userId, guildId, background, slotCount },
       update: { background, slotCount },
     });
 
-    // Upsert each slot (by position)
+    // ✅ 3️⃣ Upsert each slot (by position)
     const ops = slots.map((s, idx) =>
       prisma.slot.upsert({
         where: {
@@ -62,14 +73,14 @@ router.post("/:guildId", ensureAuthed, async (req, res) => {
         create: {
           slotConfigId: upsert.id,
           position: idx,
-          emoji: s.emoji,
+          emoji: s.emoji || "",
         },
-        update: { emoji: s.emoji },
+        update: { emoji: s.emoji || "" },
       })
     );
-
     await Promise.all(ops);
 
+    // ✅ 4️⃣ Return final config
     const result = await prisma.slotConfig.findUnique({
       where: { id: upsert.id },
       include: { slots: true },
@@ -105,19 +116,22 @@ router.post("/:guildId/send", ensureAuthed, async (req, res) => {
       return res.status(400).json({ error: "No slot config found for this guild" });
     }
 
-    // Build the message content
-    const header = `**🎰 Slot Manager Update**\nGuild: ${guildId}\nBackground: ${cfg.background}\nSlots (${cfg.slotCount}):`;
+    // ✅ Build message
+    const header = `**🎰 Slot Manager Update**
+Guild: ${guildId}
+Background: ${cfg.background}
+Slots (${cfg.slotCount}):`;
     const list = cfg.slots
       .sort((a, b) => a.position - b.position)
       .map((s) => `#${s.position + 1}: ${s.emoji || "❓"}`)
       .join("\n");
     const content = `${header}\n\n${list}`;
 
-    // Send or edit the Discord message
+    // ✅ Send or update Discord message
     const bot = await getBotGuilds();
     const sent = await bot.sendOrEditMessage(channelId, content, null, cfg.messageId);
 
-    // Save messageId + channel for future updates
+    // ✅ Save sent message info
     await prisma.slotConfig.update({
       where: { id: cfg.id },
       data: { messageId: sent.id, channelId },
