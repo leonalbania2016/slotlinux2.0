@@ -15,33 +15,35 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 8080;
 
-// ✅ 1. Trust Render's reverse proxy so secure cookies work correctly
+// ✅ Trust Render's proxy (needed for secure cookies over HTTPS)
 app.set("trust proxy", 1);
 
-// ✅ 2. Allow your frontend domain explicitly (NO trailing slash)
+// ✅ Allow CORS for your frontend
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL,   // https://slots.darksideorg.com
+    origin: ["https://slots.darksideorg.com"], // exact frontend URL
     credentials: true,
   })
 );
 
+app.use(express.json({ limit: "2mb" }));
+
+// ✅ Configure session (cross-subdomain)
 app.use(
   session({
-    secret: process.env.SESSION_SECRET,
+    secret: process.env.SESSION_SECRET || "devsecret",
     resave: false,
     saveUninitialized: false,
-    proxy: true,                // <== add this line
+    proxy: true,
     cookie: {
       httpOnly: true,
-      secure: true,
-      sameSite: 'none',
-      domain: '.darksideorg.com', // <== share cookie across subdomains
-      maxAge: 1000 * 60 * 60 * 24 * 7,
+      secure: true, // HTTPS only
+      sameSite: "none", // allow cross-site cookie
+      domain: ".darksideorg.com", // allow sharing between slots. and api.
+      maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
     },
   })
 );
-
 
 configurePassport();
 app.use(passport.initialize());
