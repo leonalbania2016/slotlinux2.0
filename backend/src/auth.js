@@ -39,20 +39,27 @@ export function configurePassport() {
     )
   );
 
-  // Serialize entire user ID into session
-  passport.serializeUser((user, done) => {
-    done(null, user.id);
-  });
+passport.serializeUser((user, done) => {
+  console.log("✅ serializeUser:", user.id);
+  done(null, user.id); // Store numeric ID
+});
 
-  // Deserialize from session and load user from DB
-  passport.deserializeUser(async (id, done) => {
-    try {
-      const user = await prisma.user.findUnique({ where: { id } });
-      done(null, user);
-    } catch (err) {
-      done(err, null);
+passport.deserializeUser(async (id, done) => {
+  console.log("✅ deserializeUser:", id);
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: Number(id) }, // force numeric if Prisma uses int IDs
+    });
+    if (!user) {
+      console.log("⚠️ No user found for id", id);
+      return done(null, false);
     }
-  });
+    done(null, user);
+  } catch (err) {
+    console.error("❌ Error in deserializeUser:", err);
+    done(err, null);
+  }
+});
 }
 
 // Simple middleware to protect routes
