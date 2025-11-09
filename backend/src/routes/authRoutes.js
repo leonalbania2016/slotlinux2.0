@@ -33,4 +33,24 @@ router.post("/logout", (req, res) => {
   });
 });
 
+// ✅ Logout route
+router.post("/logout", (req, res) => {
+  req.logout(err => {
+    if (err) {
+      console.error("❌ Logout error:", err);
+      return res.status(500).json({ error: "Logout failed" });
+    }
+
+    req.session.destroy(() => {
+      res.clearCookie("connect.sid", {
+        httpOnly: true,
+        secure: true,
+        sameSite: "none",
+        domain: ".darksideorg.com",
+      });
+      res.json({ ok: true, message: "Logged out" });
+    });
+  });
+});
+
 export default router;
