@@ -15,59 +15,72 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 8080;
 
-// ✅ Trust Render's proxy (needed for secure cookies over HTTPS)
+// ✅ Trust Render's proxy (important for secure cookies behind HTTPS)
 app.set("trust proxy", 1);
 
-// ✅ Allow CORS for your frontend
-app.use(cors({
-  origin: "https://slots.darksideorg.com",
-  credentials: true,
-}));
+// ✅ Fix CORS for production + dev
+app.use(
+  cors({
+    origin: [
+      "https://slots.darksideorg.com", // production frontend
+      "http://localhost:5173",         // local dev
+    ],
+    credentials: true, // required for cookies/sessions
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
 
+// ✅ Body parser
 app.use(express.json({ limit: "2mb" }));
 
-// ✅ Configure session (cross-subdomain)
+// ✅ Configure session (cross-subdomain cookies)
 app.use(
   session({
     secret: process.env.SESSION_SECRET || "devsecret",
     resave: false,
     saveUninitialized: false,
-    proxy: true,
+    proxy: true, // trust proxy for HTTPS cookie
     cookie: {
       httpOnly: true,
-      secure: true, // HTTPS only
-      sameSite: "none", // allow cross-site cookie
-      domain: ".darksideorg.com", // allow sharing between slots. and api.
+      secure: true, // only over HTTPS
+      sameSite: "none", // allow cross-site cookies
+      domain: ".darksideorg.com", // share between api. & slots.
       maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
     },
   })
 );
 
+// ✅ Initialize Passport (for Discord OAuth)
 configurePassport();
 app.use(passport.initialize());
 app.use(passport.session());
 
-// Health check
+// ✅ Health check
 app.get("/healthz", (_req, res) => res.json({ ok: true }));
 
-// Routes
+// ✅ API Routes
 app.use("/auth", authRoutes);
 app.use("/api", userRoutes);
 app.use("/api/discord", discordRoutes);
 app.use("/api/slots", slotRoutes);
 
-// Error handling
+// ✅ Global error handler
 app.use((err, _req, res, _next) => {
-  console.error(err);
-  res.status(500).json({ error: "Internal error", details: err.message });
+  console.error("❌ Server error:", err);
+  res.status(500).json({
+    error: "Internal server error",
+    details: err.message,
+  });
 });
 
+// ✅ Start server
 app.listen(PORT, async () => {
   try {
     await prisma.$connect();
-    console.log(`✅ Backend running on :${PORT}`);
+    console.log(`✅ Backend running on port ${PORT}`);
   } catch (e) {
-    console.error("❌ DB connection failed", e);
+    console.error("❌ Failed to connect to database:", e);
     process.exit(1);
   }
 });
