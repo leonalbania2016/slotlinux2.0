@@ -21,7 +21,7 @@ app.set("trust proxy", 1);
 // ✅ 2. Allow your frontend domain explicitly (NO trailing slash)
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL, // https://slots.darksideorg.com
+    origin: process.env.FRONTEND_URL,   // https://slots.darksideorg.com
     credentials: true,
   })
 );
@@ -31,14 +31,17 @@ app.use(
     secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
+    proxy: true,                // <== add this line
     cookie: {
       httpOnly: true,
-      secure: true, // HTTPS only
-      sameSite: 'none', // cross-domain cookies need this
+      secure: true,
+      sameSite: 'none',
+      domain: '.darksideorg.com', // <== share cookie across subdomains
       maxAge: 1000 * 60 * 60 * 24 * 7,
     },
   })
 );
+
 
 configurePassport();
 app.use(passport.initialize());
